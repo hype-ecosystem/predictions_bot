@@ -69,7 +69,7 @@ def main(argv):
         print(usage)
         sys.exit(1)
    
-    bot = Bot("912256880:AAEN3UZf1mtGgkCDCF5AhNAE2c1D1MZawT0")
+    bot = Bot(argv[1])
     manager = MarketManager(argv[1], bot)
     manager.start()
     while True:
