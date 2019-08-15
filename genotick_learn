@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+set -e
+set -u
+
+__user=$(who | awk '{print $1}')
+__db_name="markets"
+__start="" # History interval start date
+__ts_start="" # __start as unix timestamp
+__end="" # History interval end date
+__ts_end="" # __end as unix timestamp
+__market="" # Market symbol: tBTCUSD, tETHUSD, etc
+__market_path="" # Path to store this script data
+__robots_path="" # Trained genotick robots path
+__data_path="" # Path to store history data
+__genotick_url="https://genotick.com/static/download/genotick.zip"
+__config_path="" # Default genotick configuration file path
+__usage="
+Usage: $(basename $0) <start_date> <end_date> <market_symbol> ><path_to_store_data>
+
+Where:
+<start_date>     Start date of the history interval in (YYYY-MM-DD) format.
+<end_date>       End date of the history interval in (YYYY-MM-DD) format.
+<market_symbol> One of the symbols from https://api.bitfinex.com/v1/symbols, upper case with prefixed with 't', f.e. tBTCUSD
+<path_to_store_data> Path to the directory for script data
+"
+
+# Returns absolute path from relative
+function get_abs_path()
+{
+    #local target="$1"
+
+    if [ "$1" == "." ]; then
+        echo "$(pwd)"
+    elif [ "$1" == ".." ]; then
+        echo "$(dirname "$(pwd)")"
+    else
+        echo "$(cd "$(dirname "$1")"; pwd)/$(basename "$1")"
+    fi
+}
+
+function check_date()
+{
+    if [[ $1 =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && date -d "$1" >/dev/null
+    then
+        true
+    else
+        false
+    fi
+}
+
+function check_arguments()
+{
+    if [ "$#" -ne 4 ]; then
+        echo "$__usage"
+	exit 1
+    fi
+    
+    # First parameter should be the date in (YYYYMMDD) format
+    if ! check_date $1; then 
+        echo "Start date is not valid! Valid date format is (YYYY-MM-DD)."
+        exit 1
+    fi
+    __start=$1
+    __ts_start=$(date -u --date="${__start}" +"%s")"000"
+    # Second parameter should be the date in (YYYYMMDD) format
+    if ! check_date $2; then 
+        echo "End date is not valid! Valid date format is (YYYY-MM-DD)."
+        exit 1
+    fi
+    __end=$2
+    __ts_end=$(date -u --date="${__end}" +"%s")"000"
+    # Start date should be less than end date
+    if [ $(date -d ${__start} +%s) -ge $(date -d ${__end} +%s) ];
+    then
+        echo "Error: start date should be less than end date!"	
+        exit 1
+    fi 
+    __market=$3
+    __market_path=$(get_abs_path $4)    
+    if [ -d "${__market_path}" ]; then
+         # Directory exists - exit
+         echo "Directory ${__market_path} exists, please backup/remove it an run the script again."
+         exit 1
+    fi
+    __robots_path="${__market_path}/robots"
+    __data_path="${__market_path}/data"
+}
+
+function create_dir()
+{
+    mkdir -p $1
+    if [ $? -ne 0 ] ; then
+        echo "Error: failed to create directory $1"
+	    exit 1
+    fi
+}
+
+# Download and unzip genotick to specified firectory
+function get_genotick()
+{
+    echo "Downloading genotick..."
+    local file_path="$1/genotick.zip"
+    wget -O ${file_path} ${__genotick_url}
+    if [ $? -ne 0 ] ; then
+        echo "Failed to download genotick."
+        exit 1
+    fi
+    unzip -o ${file_path} genotick/genotick.jar genotick/exampleConfigFile.txt -d $1
+    if [ $? -ne 0 ] ; then
+        echo "Failed to unzip genotick."
+        exit 1
+    fi
+    rm ${file_path}    
+    # Create config
+    __config_path="$1/genotick/config.txt"
+    cp "$1/genotick/exampleConfigFile.txt" ${__config_path}       
+    if [ $? -ne 0 ] ; then
+        echo "Failed to create genotick config file."
+        exit 1
+    fi
+   
+}
+
+# Create directory for specified market, copy genotick and its config, change config, create reversed data file
+function configure_genotick()
+{    
+    echo "Configuring genotick for initial training..."  
+    # Change data directory, key: dataDirectory, value: 
+    sed -i -e "s:\([#\s]*\)\(dataDirectory\s\+\)\(.\+\):\2${__data_path}:"  ${__config_path}
+    # Change start date for training, key: startTimePoint, value: ${__start}    
+    sed -i -e "s:\([#\s]*\)\(startTimePoint\s\+\)\(.\+\):\2${__ts_start}:"  ${__config_path}
+    # Change end date for trianing, key: endTimePoint, value: ${__end}
+    sed -i -e "s:\([#\s]*\)\(endTimePoint\s\+\)\(.\+\):\2${__ts_end}:"  ${__config_path}
+    # Change folder for trained robots, key: populationDAO, value: ${__robots_path}
+    #sed -i -e "s:\([#\s]*\)\(populationDAO\s\+\)\(.\+\):\2${__robots_path}:"  ${__config_path}        
+    # Change mode to training, key: performTraining, value: true
+    sed -i -e "s:\([#\s]*\)\(performTraining\s\+\)\(.\+\):\2true:"  ${__config_path}    
+    # Change population size to 20000, key: populationDesiredSize, value: 10000
+    sed -i -e "s:\([#\s]*\)\(populationDesiredSize\s\+\)\(.\+\):\210000:"  ${__config_path} 
+    # Change to use reversed data also, key: requireSymmetricalRobots, value: true
+    sed -i -e "s:\([#\s]*\)\(requireSymmetricalRobots\s\+\)\(.\+\):\2true:"  ${__config_path}     
+}
+
+function set_robots_path()
+{
+    echo "Setting robots path to genotick configuration file..."
+    # Change folder for trained robots, key: populationDAO, value: ${__robots_path}
+    sed -i -e "s:\([#\s]*\)\(populationDAO\s\+\)\(.\+\):\2${__robots_path}:"  ${__config_path}    
+}
+
+# Download history data for specified market
+function download_history_data()
+{
+    echo "Downloading history data from $1 to $2"
+    python3 bitfinex_api.py $1 $2 $3 $4
+    if [ $? -ne 0 ] ; then
+        echo "Failed to download history data for market $1"
+        exit 1
+    fi
+}
+
+# Use genotick to create reversed data file
+function create_reversed_data()
+{
+    echo "Creating reversed data file..."
+    cd $1 && java -jar genotick.jar reverse=$2
+    if [ $? -ne 0 ] ; then
+        echo "Failed to create reversed data for market ${__market}. Please check your data and make sure it is valid."
+        exit 1
+    fi
+}
+
+# Run genotick in train mode for history data
+function train_genotick()
+{
+    echo "Training genotick..."
+    cd $1 && java -jar genotick.jar input=file:"${__config_path}"
+    if [ $? -ne 0 ] ; then
+        echo "Failed to train genotick for market ${__market}. Please check your data and make sure it is valid."
+        exit 1
+    fi
+    # Save trained robots
+    mv $1/savedPopulation*/* ${__robots_path}
+    rm genotick-log-*
+}
+
+# Insert record about this market to database
+function add_market_to_db()
+{
+    local name=${__market#?};
+    local fline=$(tail -1 ${__data_path}/${__market}.csv)
+    local arr
+    IFS=',' read -ra arr <<< ${fline}
+    local sql_script="WITH m AS (
+    INSERT INTO \"public\".market_info (name, bitfinex_api_symbol) 
+    VALUES('${name}', '${__market}') RETURNING id)
+    INSERT INTO \"public\".market_history (market_id, open, high, low, close, 
+    time_stamp)
+    VALUES((SELECT id FROM m), ${arr[1]}, ${arr[3]}, ${arr[4]}, ${arr[2]}, 
+    to_timestamp(${arr[0]}/1000) AT TIME ZONE 'UTC')"
+    psql -U ${__user} -d ${__db_name} -c "${sql_script}"
+    if [ $? -ne 0 ] ; then
+        echo "Error: failed to add market ${__market} info to database."
+	    exit 1
+    fi
+}
+
+check_arguments $@
+create_dir ${__market_path}
+create_dir ${__robots_path}
+create_dir ${__data_path}
+get_genotick ${__market_path}
+configure_genotick
+download_history_data ${__start} ${__end} ${__market} "${__data_path}/${__market}.csv"
+create_reversed_data "${__market_path}/genotick" ${__data_path}
+train_genotick "${__market_path}/genotick"
+set_robots_path
+add_market_to_db
+# Add info about this market to database
+echo "Genotick trainig is done."
+echo "Your robots path: "${__robots_path}
+echo "Your data path: "${__data_path}
+

@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+set -e
+set -u
+
+__user=$(who | awk '{print $1}')
+__db_name="markets"
+__sql_script="
+
+CREATE TABLE public.market_info (
+    id integer NOT NULL,
+    name character varying NOT NULL,
+    bitfinex_api_symbol character varying
+);
+
+CREATE SEQUENCE public.market_info_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER SEQUENCE public.market_info_id_seq OWNED BY public.market_info.id;
+ALTER TABLE ONLY public.market_info ALTER COLUMN id SET DEFAULT nextval('public.market_info_id_seq'::regclass);
+ALTER TABLE ONLY public.market_info ADD CONSTRAINT market_info_pkey PRIMARY KEY (id);
+ALTER TABLE public.market_info ADD UNIQUE (bitfinex_api_symbol);
+
+CREATE TABLE public.market_history (
+    id integer NOT NULL,
+    market_id integer NOT NULL,
+    open double precision NOT NULL,
+    high double precision NOT NULL,
+    low double precision NOT NULL,
+    close double precision NOT NULL,
+    time_stamp timestamp without time zone NOT NULL
+);
+
+CREATE SEQUENCE public.market_history_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER SEQUENCE public.market_history_id_seq OWNED BY public.market_history.id;
+ALTER TABLE ONLY public.market_history ALTER COLUMN id SET DEFAULT nextval('public.market_history_id_seq'::regclass);
+ALTER TABLE ONLY public.market_history
+    ADD CONSTRAINT market_history_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.market_history
+    ADD CONSTRAINT market_history_market_id_fkey FOREIGN KEY (market_id) REFERENCES public.market_info(id) MATCH FULL ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE public.market_history
+  ADD CONSTRAINT market_history_market_id_time_stamp_key UNIQUE(market_id, time_stamp);
+
+CREATE TABLE public.market_predictions (
+    id integer NOT NULL,
+    time_stamp timestamp without time zone NOT NULL,
+    market_id integer NOT NULL,
+    genotick_prediction integer
+);
+
+CREATE SEQUENCE public.market_predictions_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER SEQUENCE public.market_predictions_id_seq OWNED BY public.market_predictions.id;
+ALTER TABLE ONLY public.market_predictions ALTER COLUMN id SET DEFAULT nextval('public.market_predictions_id_seq'::regclass);
+ALTER TABLE ONLY public.market_predictions
+    ADD CONSTRAINT market_predictions_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.market_predictions
+    ADD CONSTRAINT market_predictions_time_stamp_market_id_key UNIQUE (time_stamp, market_id);
+ALTER TABLE public.market_predictions
+  ADD FOREIGN KEY (market_id) REFERENCES public.market_info (id) MATCH FULL
+   ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+CREATE TABLE public.chats (
+    id integer NOT NULL
+);
+
+ALTER TABLE ONLY public.chats
+    ADD CONSTRAINT chats_pkey PRIMARY KEY (id);
+"
+function install_packets()
+{
+    echo "Installing system packets..."
+    sudo apt-get install -y gcc openjdk-11-jdk maven python3-dev python3-pip python3-setuptools unzip postgresql postgresql-contrib python-psycopg2 libpq-dev cron
+    if [ $? -ne 0 ] ; then
+        echo "Error: failed to install packets"
+	    exit 1
+    fi
+
+    echo "Installing python packets..."
+    pip3 install requests pandas numpy psycopg2 apscheduler
+    if [ $? -ne 0 ] ; then
+        echo "Error: failed to install python packets"
+	    exit 1
+    fi
+}
+
+function configure_postgresql()
+{
+    echo "Configuring database..."
+
+    # Create bot user
+    echo "Creating database user"
+    #sudo -u postgres dropdb ${__db_name}
+    #sudo -u postgres dropuser ${__user}
+    sudo -u postgres createuser -d -e -l -w  ${__user}
+    if [ $? -ne 0 ] ; then
+        echo "Error: failed to create bot user '${__user}' for database"
+	    exit 1
+    fi
+
+    # Create new database
+    echo "Creating database..."    
+    sudo -u ${__user} createdb ${__db_name}
+    if [ $? -ne 0 ] ; then
+        echo "Error: failed to create ${__db_name} database"
+	    exit 1
+    fi
+
+    # Create tables
+    echo "Creating tables..."
+    sudo -u ${__user} psql -U ${__user} -d ${__db_name} -c "${__sql_script}"
+    if [ $? -ne 0 ] ; then
+        echo "Error: failed to create ${__db_name} database"
+	    exit 1
+    fi
+}
+
+function configure_scripts()
+{
+    echo "Configuring scripts..."
+    local path="/home/${__user}/trading_bot"
+    sudo -u ${__user} mkdir -p ${path}
+    if [ $? -ne 0 ] ; then
+        echo "Error: failed to create directory ${path} for scripts"
+	    exit 1
+    fi
+    sudo -u ${__user} cp -f *.py genotick_learn ${path}
+    if [ $? -ne 0 ] ; then
+        echo "Error: failed to copy scripts to destination directory ${path}"
+	    exit 1
+    fi
+    local job="@reboot /usr/bin/python3 /home/${__user}/trading_bot/market_manager.py /home/${__user}/trading_bot > /home/${__user}/mm.log 2>&1"
+    (crontab -u ${__user} -l 2>/dev/null; echo ${job}) | crontab -u ${__user} -
+    if [ $? -ne 0 ] ; then
+        echo "Error: failed to add job to cron"
+	    exit 1
+    fi
+}
+
+install_packets
+configure_postgresql
+configure_scripts
