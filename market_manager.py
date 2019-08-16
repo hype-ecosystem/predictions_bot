@@ -49,9 +49,7 @@ class MarketManager:
     def _bot_job(self):
         try:
             chats = self._bot.get_chat_list()
-            for c in chats:
-                print("Adding chat:", c)
-                self._db.add_chat(c)
+            map(self._db.add_chat, chats)
         except Exception:
             self._logger.exception(f"Failed to collect bot chats.")
     
@@ -64,12 +62,12 @@ def market_thread_func(market_symbol, path, queue):
     m.genotick_predict_and_train()
 
 def main(argv):
-    usage = "usage: {} path".format(argv[0])    
-    if len(argv) != 2:
+    usage = "usage: {} path bot_token".format(argv[0])    
+    if len(argv) != 3:
         print(usage)
         sys.exit(1)
    
-    bot = Bot(argv[1])
+    bot = Bot(argv[2])
     manager = MarketManager(argv[1], bot)
     manager.start()
     while True:

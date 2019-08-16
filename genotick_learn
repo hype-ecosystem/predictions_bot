@@ -8,14 +8,14 @@ __start="" # History interval start date
 __ts_start="" # __start as unix timestamp
 __end="" # History interval end date
 __ts_end="" # __end as unix timestamp
+__path=""   # Root directory that ll contain market directory
 __market="" # Market symbol: tBTCUSD, tETHUSD, etc
 __market_path="" # Path to store this script data
 __robots_path="" # Trained genotick robots path
 __data_path="" # Path to store history data
-__genotick_url="https://genotick.com/static/download/genotick.zip"
 __config_path="" # Default genotick configuration file path
 __usage="
-Usage: $(basename $0) <start_date> <end_date> <market_symbol> ><path_to_store_data>
+Usage: $(basename $0) <start_date> <end_date> <market_symbol> <path_to_store_data>
 
 Where:
 <start_date>     Start date of the history interval in (YYYY-MM-DD) format.
@@ -52,7 +52,7 @@ function check_arguments()
 {
     if [ "$#" -ne 4 ]; then
         echo "$__usage"
-	exit 1
+	    exit 1
     fi
     
     # First parameter should be the date in (YYYYMMDD) format
@@ -76,7 +76,8 @@ function check_arguments()
         exit 1
     fi 
     __market=$3
-    __market_path=$(get_abs_path $4)    
+    __path=$(get_abs_path $4)
+    __market_path="${__path}/${__market}"
     if [ -d "${__market_path}" ]; then
          # Directory exists - exit
          echo "Directory ${__market_path} exists, please backup/remove it an run the script again."
@@ -95,27 +96,25 @@ function create_dir()
     fi
 }
 
-# Download and unzip genotick to specified firectory
-function get_genotick()
+# Check that genotick folder exists and contains genotick.jar and config files
+function check_genotick()
 {
-    echo "Downloading genotick..."
-    local file_path="$1/genotick.zip"
-    wget -O ${file_path} ${__genotick_url}
-    if [ $? -ne 0 ] ; then
-        echo "Failed to download genotick."
+    local genotick_path="${__path}/genotick"
+    local genotick_app="${genotick_path}/genotick.jar"
+    local genotick_config="${genotick_path}/exampleConfigFile.txt"
+
+    if [ ! -d "${genotick_path}" ]; then
+        echo "Directory ${genotick_path} does notexist!"
         exit 1
     fi
-    unzip -o ${file_path} genotick/genotick.jar genotick/exampleConfigFile.txt -d $1
-    if [ $? -ne 0 ] ; then
-        echo "Failed to unzip genotick."
+
+    if [ ! -f "${genotick_app}" ]; then
+        echo "${genotick_app} does not exist!"
         exit 1
     fi
-    rm ${file_path}    
-    # Create config
-    __config_path="$1/genotick/config.txt"
-    cp "$1/genotick/exampleConfigFile.txt" ${__config_path}       
-    if [ $? -ne 0 ] ; then
-        echo "Failed to create genotick config file."
+
+    if [ ! -f "${genotick_config}" ]; then
+        echo "${genotick_config} does not exist!"
         exit 1
     fi
    
@@ -124,6 +123,14 @@ function get_genotick()
 # Create directory for specified market, copy genotick and its config, change config, create reversed data file
 function configure_genotick()
 {    
+    # Create a copy of config file for this market
+    __config_path="${__market_path}/config.txt"
+    cp "${__path}/genotick/exampleConfigFile.txt" ${__config_path}       
+    if [ $? -ne 0 ] ; then
+        echo "Failed to create genotick config file for market."
+        exit 1
+    fi
+
     echo "Configuring genotick for initial training..."  
     # Change data directory, key: dataDirectory, value: 
     sed -i -e "s:\([#\s]*\)\(dataDirectory\s\+\)\(.\+\):\2${__data_path}:"  ${__config_path}
@@ -209,7 +216,7 @@ check_arguments $@
 create_dir ${__market_path}
 create_dir ${__robots_path}
 create_dir ${__data_path}
-get_genotick ${__market_path}
+check_genotick ${__market_path}
 configure_genotick
 download_history_data ${__start} ${__end} ${__market} "${__data_path}/${__market}.csv"
 create_reversed_data "${__market_path}/genotick" ${__data_path}

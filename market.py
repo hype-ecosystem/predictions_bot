@@ -21,18 +21,26 @@ class Market:
         self._logger.setLevel(logging.ERROR)
         handler = logging.handlers.SysLogHandler(address='/dev/log')
         self._logger.addHandler(handler)
-        # In the path we should have 3 folders: data, genotick, robots
+        # Path structure:
+        # path
+        #  - genotick/
+        #    - genotick.jar
+        #  - <market_name>/
+        #    - config.txt
+        #    - data/
+        #      - <market_symbol>.csv
+        #    - robots/
+        #      - robot files  
         self._path = os.path.abspath(path)
         self._symbol = symbol
         self._db = DatabaseManager()
-        self._genotick_path = fr"{self._path}/{self._symbol[1:]}/genotick/genotick.jar"
+        self._genotick_path = fr"{self._path}/genotick/genotick.jar"
         self._data_path = fr"{self._path}/{self._symbol[1:]}/data/{self._symbol}.csv"
         self._reverse_data_path = fr"{self._path}/{self._symbol[1:]}/data/reverse_{self._symbol}.csv"
-        self._gen_config_path = fr"{self._path}/{self._symbol[1:]}/genotick/config.txt"
+        self._gen_config_path = fr"{self._path}/{self._symbol[1:]}/config.txt"
 
     def genotick_predict_and_train(self):
         try:
-
             ts_prediction_start = self._db.get_last_predictions_ts(self._symbol)
             ts_history_start = self._db.get_last_history_ts(self._symbol) * 1000            
             if(ts_prediction_start is None):
@@ -65,12 +73,17 @@ class Market:
         except Exception:
             self._logger.exception(f"Failed to predict and train with genotick for market {self._symbol}")
 
+    def _get_custom_env(self):
+        result = os.environ.copy()
+        result["GENOTICK_LOG_FILE"] = f"{self._symbol}_genotick_log.txt"
+        return result
+
     def _genotick_predict(self):
         command = ["java",
                    "-jar",
                    self._genotick_path,
                    f"input=file:{self._gen_config_path}"]
-        cp = sp.run(command, universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        cp = sp.run(command, env=self._get_custom_env(), universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
         if(cp.returncode != 0):
             raise RuntimeError(f"Failed to run genotick in prediction mode for market {self._symbol}.", cp.stdout, cp.stderr)
         return cp.stdout
@@ -103,7 +116,7 @@ class Market:
                    "-jar",
                    self._genotick_path,
                    f"reverse={self._data_path}"]
-        cp = sp.run(command, universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        cp = sp.run(command, env=self._get_custom_env(), universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
         if(cp.returncode != 0):
             raise RuntimeError(f"Genotick failed to create reverse data file for market {self._symbol}. ", cp.stdout, cp.stderr)
 
@@ -140,7 +153,7 @@ class Market:
                    "-jar",
                    self._genotick_path,
                    f"input=file:{self._gen_config_path}"]
-        cp = sp.run(command, universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        cp = sp.run(command, env=self._get_custom_env(), universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
         if(cp.returncode != 0):
             raise RuntimeError(f"Failed to train genotick for market {self._symbol}.", cp.stdout, cp.stderr)
 
