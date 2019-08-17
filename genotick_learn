@@ -145,7 +145,13 @@ function configure_genotick()
     # Change population size to 20000, key: populationDesiredSize, value: 10000
     sed -i -e "s:\([#\s]*\)\(populationDesiredSize\s\+\)\(.\+\):\210000:"  ${__config_path} 
     # Change to use reversed data also, key: requireSymmetricalRobots, value: true
-    sed -i -e "s:\([#\s]*\)\(requireSymmetricalRobots\s\+\)\(.\+\):\2true:"  ${__config_path}     
+    sed -i -e "s:\([#\s]*\)\(requireSymmetricalRobots\s\+\)\(.\+\):\2true:"  ${__config_path}  
+    # Change result threshold to 1.5, key: resultThreshold, value: 1.5
+    sed -i -e "s:\([#\s]*\)\(resultThreshold\s\+\)\(.\+\):\21.5:"  ${__config_path}
+    # Change protectBestRobots to 15%, key: protectBestRobots, value: 0.15
+    sed -i -e "s:\([#\s]*\)\(protectBestRobots\s\+\)\(.\+\):\20.15:"  ${__config_path}
+    # Change maximumDeathByAge to 10%, key: maximumDeathByAge, value: 0.1
+    sed -i -e "s:\([#\s]*\)\(maximumDeathByAge\s\+\)\(.\+\):\20.1:"  ${__config_path} 
 }
 
 function set_robots_path()
