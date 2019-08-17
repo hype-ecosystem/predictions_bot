@@ -9,6 +9,7 @@ __ts_start="" # __start as unix timestamp
 __end="" # History interval end date
 __ts_end="" # __end as unix timestamp
 __path=""   # Root directory that ll contain market directory
+__genotick_path="" # Path with genotick binary
 __market="" # Market symbol: tBTCUSD, tETHUSD, etc
 __market_path="" # Path to store this script data
 __robots_path="" # Trained genotick robots path
@@ -77,6 +78,7 @@ function check_arguments()
     fi 
     __market=$3
     __path=$(get_abs_path $4)
+    __genotick_path="${__path}/genotick"
     __market_path="${__path}/${__market}"
     if [ -d "${__market_path}" ]; then
          # Directory exists - exit
@@ -98,13 +100,12 @@ function create_dir()
 
 # Check that genotick folder exists and contains genotick.jar and config files
 function check_genotick()
-{
-    local genotick_path="${__path}/genotick"
-    local genotick_app="${genotick_path}/genotick.jar"
-    local genotick_config="${genotick_path}/exampleConfigFile.txt"
+{   
+    local genotick_app="${__genotick_path}/genotick.jar"
+    local genotick_config="${__genotick_path}/exampleConfigFile.txt"
 
-    if [ ! -d "${genotick_path}" ]; then
-        echo "Directory ${genotick_path} does notexist!"
+    if [ ! -d "${__genotick_path}" ]; then
+        echo "Directory ${__genotick_path} does notexist!"
         exit 1
     fi
 
@@ -117,7 +118,6 @@ function check_genotick()
         echo "${genotick_config} does not exist!"
         exit 1
     fi
-   
 }
 
 # Create directory for specified market, copy genotick and its config, change config, create reversed data file
@@ -125,7 +125,7 @@ function configure_genotick()
 {    
     # Create a copy of config file for this market
     __config_path="${__market_path}/config.txt"
-    cp "${__path}/genotick/exampleConfigFile.txt" ${__config_path}       
+    cp "${__genotick_path}/exampleConfigFile.txt" ${__config_path}       
     if [ $? -ne 0 ] ; then
         echo "Failed to create genotick config file for market."
         exit 1
@@ -142,16 +142,21 @@ function configure_genotick()
     #sed -i -e "s:\([#\s]*\)\(populationDAO\s\+\)\(.\+\):\2${__robots_path}:"  ${__config_path}        
     # Change mode to training, key: performTraining, value: true
     sed -i -e "s:\([#\s]*\)\(performTraining\s\+\)\(.\+\):\2true:"  ${__config_path}    
-    # Change population size to 20000, key: populationDesiredSize, value: 10000
-    sed -i -e "s:\([#\s]*\)\(populationDesiredSize\s\+\)\(.\+\):\210000:"  ${__config_path} 
+    # Change population size to 20000, key: populationDesiredSize, value: 20000
+    sed -i -e "s:\([#\s]*\)\(populationDesiredSize\s\+\)\(.\+\):\220000:"  ${__config_path} 
     # Change to use reversed data also, key: requireSymmetricalRobots, value: true
     sed -i -e "s:\([#\s]*\)\(requireSymmetricalRobots\s\+\)\(.\+\):\2true:"  ${__config_path}  
-    # Change result threshold to 1.5, key: resultThreshold, value: 1.5
+    # Change result threshold to 1.25, key: resultThreshold, value: 1.5
     sed -i -e "s:\([#\s]*\)\(resultThreshold\s\+\)\(.\+\):\21.5:"  ${__config_path}
     # Change protectBestRobots to 15%, key: protectBestRobots, value: 0.15
     sed -i -e "s:\([#\s]*\)\(protectBestRobots\s\+\)\(.\+\):\20.15:"  ${__config_path}
-    # Change maximumDeathByAge to 10%, key: maximumDeathByAge, value: 0.1
-    sed -i -e "s:\([#\s]*\)\(maximumDeathByAge\s\+\)\(.\+\):\20.1:"  ${__config_path} 
+    # Change maximumDeathByAge to 20%, key: maximumDeathByAge, value: 0.2
+    sed -i -e "s:\([#\s]*\)\(maximumDeathByAge\s\+\)\(.\+\):\20.2:"  ${__config_path} 
+    # Change maximumDeathByWeight to 20%, key: maximumDeathByWeight, value: 0.2
+    sed -i -e "s:\([#\s]*\)\(maximumDeathByWeight\s\+\)\(.\+\):\20.2:"  ${__config_path} 
+    # Change dataMaximumOffset to 24, key: dataMaximumOffset, value: 24
+    sed -i -e "s:\([#\s]*\)\(dataMaximumOffset\s\+\)\(.\+\):\224:"  ${__config_path}
+    
 }
 
 function set_robots_path()
@@ -164,10 +169,10 @@ function set_robots_path()
 # Download history data for specified market
 function download_history_data()
 {
-    echo "Downloading history data from $1 to $2"
-    python3 bitfinex_api.py $1 $2 $3 $4
+    echo "Downloading history data from ${__start} to ${__end}"
+    python3 bitfinex_api.py ${__start} ${__end} ${__market} "${__data_path}/${__market}.csv"
     if [ $? -ne 0 ] ; then
-        echo "Failed to download history data for market $1"
+        echo "Failed to download history data for market ${__start}"
         exit 1
     fi
 }
@@ -176,25 +181,26 @@ function download_history_data()
 function create_reversed_data()
 {
     echo "Creating reversed data file..."
-    cd $1 && java -jar genotick.jar reverse=$2
+    cd ${__market_path} && java -jar ${__genotick_path}/genotick.jar reverse=${__data_path}
     if [ $? -ne 0 ] ; then
         echo "Failed to create reversed data for market ${__market}. Please check your data and make sure it is valid."
         exit 1
     fi
+    rm ${__market_path}/genotick-log-*
 }
 
 # Run genotick in train mode for history data
 function train_genotick()
 {
     echo "Training genotick..."
-    cd $1 && java -jar genotick.jar input=file:"${__config_path}"
+    cd ${__market_path} && java -jar ${__genotick_path}/genotick.jar input=file:"${__config_path}"
     if [ $? -ne 0 ] ; then
         echo "Failed to train genotick for market ${__market}. Please check your data and make sure it is valid."
         exit 1
     fi
     # Save trained robots
-    mv $1/savedPopulation*/* ${__robots_path}
-    rm genotick-log-*
+    mv ${__market_path}/savedPopulation*/* ${__robots_path}
+    rm ${__market_path}/genotick-log-*
 }
 
 # Insert record about this market to database
@@ -222,11 +228,11 @@ check_arguments $@
 create_dir ${__market_path}
 create_dir ${__robots_path}
 create_dir ${__data_path}
-check_genotick ${__market_path}
+check_genotick
 configure_genotick
-download_history_data ${__start} ${__end} ${__market} "${__data_path}/${__market}.csv"
-create_reversed_data "${__market_path}/genotick" ${__data_path}
-train_genotick "${__market_path}/genotick"
+download_history_data 
+create_reversed_data
+train_genotick
 set_robots_path
 add_market_to_db
 # Add info about this market to database

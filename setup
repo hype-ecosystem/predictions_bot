@@ -5,11 +5,12 @@ set -u
 __user=$(who | awk '{print $1}')
 __db_name="markets"
 __path=""
-__usage="Usage: $(basename $0) <path_to_store_data> <bot_api_key>
+__bot_token=""
+__usage="Usage: ./$(basename $0) <path_to_store_data> <bot_api_key>
 
 Where:
-<bot_api_key>        Token for telegram bot API
 <path_to_store_data> Path to the directory for script data
+<bot_api_key>        Token for telegram bot API
 "
 __sql_script="
 
@@ -119,6 +120,8 @@ function check_arguments()
          echo "Directory ${__path} exists, please backup/remove it an run the script again."
          exit 1
     fi
+
+    __bot_token=$2
 }
 
 function install_packets()
@@ -144,8 +147,8 @@ function configure_postgresql()
 
     # Create bot user
     echo "Creating database user"
-    #sudo -u postgres dropdb ${__db_name}
-    #sudo -u postgres dropuser ${__user}
+    sudo -u postgres dropdb ${__db_name}
+    sudo -u postgres dropuser ${__user}
     sudo -u postgres createuser -d -e -l -w  ${__user}
     if [ $? -ne 0 ] ; then
         echo "Error: failed to create bot user '${__user}' for database"
@@ -177,19 +180,18 @@ function configure_scripts()
         echo "Error: failed to create directory ${__path} for scripts"
 	    exit 1
     fi
-    sudo -u ${__user} cp -f *.py genotick_learn genotick.zip ${__path}
+    sudo -u ${__user} cp -f *.py genotick_learn ${__path}
     if [ $? -ne 0 ] ; then
         echo "Error: failed to copy scripts to destination directory ${__path}"
 	    exit 1
     fi
     # Unzip genotick in its own directory
-    sudo -u ${__user} unzip ${__path}/genotick.zip
+    sudo -u ${__user} unzip genotick.zip -d ${__path}
     if [ $? -ne 0 ] ; then
-        echo "Error: failed to unzip genotick"
+        echo "Error: failed to unzip genotick to ${__path}"
 	    exit 1
-    fi
-    sudo rm ${__path}/genotick.zip
-    local job="@reboot /usr/bin/python3 ${__path}/market_manager.py ${__path} $2 > ${__path}/mm.log 2>&1"
+    fi   
+    local job="@reboot /usr/bin/python3 ${__path}/market_manager.py ${__path} ${__bot_token} > ${__path}/mm.log 2>&1"
     (crontab -u ${__user} -l 2>/dev/null; echo ${job}) | crontab -u ${__user} -
     if [ $? -ne 0 ] ; then
         echo "Error: failed to add job to cron"
@@ -197,7 +199,7 @@ function configure_scripts()
     fi
 }
 
-check_arguments
+check_arguments $@
 install_packets
 configure_postgresql
 configure_scripts
