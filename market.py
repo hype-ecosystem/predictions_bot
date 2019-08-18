@@ -35,9 +35,9 @@ class Market:
         self._symbol = symbol
         self._db = DatabaseManager()
         self._genotick_path = fr"{self._path}/genotick/genotick.jar"
-        self._data_path = fr"{self._path}/{self._symbol[1:]}/data/{self._symbol}.csv"
-        self._reverse_data_path = fr"{self._path}/{self._symbol[1:]}/data/reverse_{self._symbol}.csv"
-        self._gen_config_path = fr"{self._path}/{self._symbol[1:]}/config.txt"
+        self._data_path = fr"{self._path}/{self._symbol}/data/{self._symbol}.csv"
+        self._reverse_data_path = fr"{self._path}/{self._symbol}/data/reverse_{self._symbol}.csv"
+        self._gen_config_path = fr"{self._path}/{self._symbol}/config.txt"
 
     def genotick_predict_and_train(self):
         try:
