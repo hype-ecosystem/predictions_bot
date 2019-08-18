@@ -197,6 +197,11 @@ function configure_scripts()
         echo "Error: failed to add job to cron"
 	    exit 1
     fi
+    sudo service cron restart
+    if [ $? -ne 0 ] ; then
+        echo "Error: failed to restart cron"
+	    exit 1
+    fi 
 }
 
 check_arguments $@
