@@ -9,6 +9,7 @@ class Bot:
     
     def _get_url(self, url, data):
         response = requests.get(url, params=data)
+        #print("Response:", response)
         content = response.content.decode("utf8")
         return content
 

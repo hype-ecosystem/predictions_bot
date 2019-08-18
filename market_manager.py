@@ -49,7 +49,8 @@ class MarketManager:
     def _bot_job(self):
         try:
             chats = self._bot.get_chat_list()
-            map(self._db.add_chat, chats)
+            for c in chats:
+                self._db.add_chat(c)
         except Exception:
             self._logger.exception(f"Failed to collect bot chats.")
     
