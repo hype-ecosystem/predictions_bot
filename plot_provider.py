@@ -16,7 +16,7 @@ class PlotProvider:
         # data[0] - datetime
         # data[1] - close
         # data[2] - predictions: -1, 0, 1 
-        fig,ax = plt.subplots()      
+        fig, ax = plt.subplots()      
         plt.plot(data[:, 0], data[:, 1], lw=2, ls='-', c='blue')
         plt.grid(True)
         plt.title(market_name)
@@ -41,9 +41,7 @@ class PlotProvider:
        
         # Save to buffer
         bio = BytesIO()
-        bio.name = 'plot.png'
-        plt.savefig(bio, bbox_inches='tight')
-        bio.seek(0)
+        fig.savefig(bio, bbox_inches='tight', format='png')                
         return bio
 
 def main(argv):

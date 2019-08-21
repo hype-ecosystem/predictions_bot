@@ -54,7 +54,7 @@ class MarketManager:
             chats = self._bot.get_chat_list()
             for c in chats:
                 self._db.add_chat(c)
-        except Exception:
+        except Exception:            
             self._logger.exception(f"Failed to collect bot chats.")
     
 

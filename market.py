@@ -110,7 +110,7 @@ class Market:
     
     def _enqueue_market_plot(self):
         data = self._db.get_24h_plot_data(self._symbol)
-        image = self._plotProvider.get_market_24plot(data, self._symbol)
+        image = self._plotProvider.get_market_24plot(data, self._symbol[1:])
         self._message_queue.put({'type': 'image', 'data': image})
 
     def _remove_old_reverse_data_file(self):

@@ -44,7 +44,8 @@ class Bot:
 
     def _send_image_to_chat(self, image, chat_id):
         url = fr"{self._api_url}sendPhoto"
-        files = {'photo': image}
+        image.seek(0)
+        files = {'photo': image}    
         data = {'chat_id' : chat_id}
         requests.post(url, files=files, data=data)  
 
