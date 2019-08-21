@@ -134,7 +134,7 @@ function install_packets()
     fi
 
     echo "Installing python packets..."
-    pip3 install wheel requests pandas numpy psycopg2 apscheduler
+    pip3 install wheel requests pandas numpy psycopg2 apscheduler matplotlib
     if [ $? -ne 0 ] ; then
         echo "Error: failed to install python packets"
 	    exit 1
