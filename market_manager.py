@@ -29,7 +29,10 @@ class MarketManager:
         try:
             message = self._message_queue.get()
             chats = self._db.get_chat_list()
-            self._bot.send_message(message, chats)
+            if(message["type"] == "text"):
+                self._bot.send_text_message(message["data"], chats)
+            elif(message["type"] == "image"):
+                self._bot.send_image(message["data"], chats)
             self._message_queue.task_done()
         except Exception:
             self._logger.exception(f"Failed to process market message.")

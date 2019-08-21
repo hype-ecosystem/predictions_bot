@@ -38,12 +38,23 @@ class Bot:
         return chat_list
 
     def _send_message_to_chat(self, message, chat_id):
-        url = fr"{self._api_url}sendMessage?text={message}&chat_id={chat_id}"
-        self._get_url(url, None)
+        data = {'chat_id': chat_id, 'text': message}
+        url = fr"{self._api_url}sendMessage"
+        self._get_url(url, data)
 
-    def send_message(self, message, chats):        
+    def _send_image_to_chat(self, image, chat_id):
+        url = fr"{self._api_url}sendPhoto"
+        files = {'photo': image}
+        data = {'chat_id' : chat_id}
+        requests.post(url, files=files, data=data)  
+
+    def send_text_message(self, message, chats):        
         for id in chats:
             self._send_message_to_chat(message, id)
+
+    def send_image(self, image, chats):
+        for id in chats:
+            self._send_image_to_chat(image, id)
 
 def main(argv):
     usage = "usage: {} bot_token".format(argv[0])

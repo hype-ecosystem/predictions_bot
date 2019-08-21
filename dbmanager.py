@@ -3,6 +3,7 @@ import os
 import pwd
 import psycopg2
 import pandas as pd
+import numpy as np
 from io import StringIO
 
 class DMError(Exception):
@@ -79,7 +80,6 @@ class DatabaseManager:
                 return c.fetchone()[0]
         except (Exception, psycopg2.Error) as error :
             raise DMError(f"Failed to get last predictions timestamp for market {market_symbol}", error)       
-    
 
     def get_last_history_ts(self, market_symbol):
         try:
@@ -141,6 +141,24 @@ class DatabaseManager:
                     c.execute(query, query_params)       
         except (Exception, psycopg2.Error) as error :
             raise DMError(f"Failed to update predictions for market {market_symbol}", error)                         
+
+    def get_24h_plot_data(self, market_symbol):
+        try:
+            query = r"""SELECT h.time_stamp, h.close, p.genotick_prediction
+            FROM market_history h
+            INNER JOIN market_predictions p
+            ON h.market_id = p.market_id AND h.time_stamp = p.time_stamp
+            WHERE h.market_id=(SELECT id FROM market_info WHERE bitfinex_api_symbol='tBTCUSD')
+            AND
+            h.time_stamp > ((now() at time zone 'utc') - interval '25 hours') at time zone 'utc'
+            ORDER BY h.time_stamp ASC;
+            """
+            with self._connection.cursor() as c:
+                c.execute(query)
+                return np.array(c.fetchall())
+        except (Exception, psycopg2.Error) as error :
+            raise DMError(f"Failed to get data for 24h plot for market {market_symbol}", error)                         
+              
           
 
 def main(argv):

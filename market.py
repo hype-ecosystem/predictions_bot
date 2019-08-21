@@ -8,6 +8,7 @@ import logging
 import logging.handlers
 import bitfinex_api
 from dbmanager import DatabaseManager
+from plot_provider import PlotProvider
 import queue
 
 
@@ -21,6 +22,8 @@ class Market:
         self._logger.setLevel(logging.ERROR)
         handler = logging.handlers.SysLogHandler(address='/dev/log')
         self._logger.addHandler(handler)
+
+        self._plotProvider = PlotProvider()
         # Path structure:
         # path
         #  - genotick/
@@ -62,8 +65,9 @@ class Market:
             if(len(predictions) == 0):
                 self._logger.info(f"No predictions for market {self._symbol}")
                 return
-            print("Queuing predictions to bot queue...")
+            print("Queuing predictions and plot to bot queue...")
             self._enqueue_predictions(predictions)
+            self._enqueue_market_plot()
             print("Updating predictions in database...")
             self._db.update_predictions(predictions, self._symbol)            
             print("Configuring genotick for training...")
@@ -102,7 +106,12 @@ class Market:
         for p in predictions:
             ts = datetime.datetime.utcfromtimestamp(int(p[0])).strftime('%Y-%m-%d %H:%M:%S')
             message = f"{ts} {self._symbol[1:]} {p[1]}"
-            self._message_queue.put(message)
+            self._message_queue.put({'type': 'text', 'data': message})
+    
+    def _enqueue_market_plot(self):
+        data = self._db.get_24h_plot_data(self._symbol)
+        image = self._plotProvider.get_market_24plot(data, self._symbol)
+        self._message_queue.put({'type': 'image', 'data': image})
 
     def _remove_old_reverse_data_file(self):
         command = ["rm", "-f", self._reverse_data_path]
