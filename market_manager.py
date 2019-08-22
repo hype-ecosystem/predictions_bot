@@ -1,6 +1,7 @@
 from dbmanager import DatabaseManager
 from tgbot import Bot
 from market import Market
+from plot_provider import PlotProvider
 import threading
 import datetime
 import sys
@@ -20,6 +21,7 @@ class MarketManager:
         self._db = DatabaseManager()
         self._path = path
         self._scheduler = BackgroundScheduler()
+        self._scheduler.add_job(self._dayly_market_plot_job, trigger='cron', hour='0')
         self._scheduler.add_job(self._predictions_job, trigger='cron', hour='*')
         self._scheduler.add_job(self._bot_job, trigger='cron', minute='*')
         self._markets = dict()
@@ -55,8 +57,18 @@ class MarketManager:
             for c in chats:
                 self._db.add_chat(c)
         except Exception:            
-            self._logger.exception(f"Failed to collect bot chats.")
+            self._logger.exception("Failed to collect bot chats.")
     
+    def _dayly_market_plot_job(self):
+        try:
+            pp = PlotProvider()
+            markets = self._db.get_markets()
+            for m in markets:
+                data = self._db.get_24h_plot_data(m)
+                image = pp.get_market_24plot(data, m[1:])
+                self._message_queue.put({'type': 'image', 'data': image})
+        except Exception:
+            self._logger.exception("Failed to push daily market plots.")
 
     def start(self):
         self._scheduler.start()

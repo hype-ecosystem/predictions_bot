@@ -148,13 +148,13 @@ class DatabaseManager:
             FROM market_history h
             INNER JOIN market_predictions p
             ON h.market_id = p.market_id AND h.time_stamp = p.time_stamp
-            WHERE h.market_id=(SELECT id FROM market_info WHERE bitfinex_api_symbol='tBTCUSD')
+            WHERE h.market_id=(SELECT id FROM market_info WHERE bitfinex_api_symbol=%s)
             AND
-            h.time_stamp > ((now() at time zone 'utc') - interval '25 hours') at time zone 'utc'
+            h.time_stamp >= ((now() at time zone 'utc') - interval '24 hours') at time zone 'utc'
             ORDER BY h.time_stamp ASC;
             """
             with self._connection.cursor() as c:
-                c.execute(query)
+                c.execute(query, (market_symbol,))
                 return np.array(c.fetchall())
         except (Exception, psycopg2.Error) as error :
             raise DMError(f"Failed to get data for 24h plot for market {market_symbol}", error)                         

@@ -67,7 +67,7 @@ class Market:
                 return
             print("Queuing predictions and plot to bot queue...")
             self._enqueue_predictions(predictions)
-            self._enqueue_market_plot()
+            #self._enqueue_market_plot()
             print("Updating predictions in database...")
             self._db.update_predictions(predictions, self._symbol)            
             print("Configuring genotick for training...")
