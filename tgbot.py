@@ -29,8 +29,12 @@ class Bot:
             updates = self._get_json_from_url(url, data)
             if(updates['ok'] == True and len(updates['result']) > 0):                                
                 for i in updates['result']:
-                    if i['message']['chat']['id'] not in chat_list:
-                        chat_list.append(i['message']['chat']['id'])
+                    if 'message' in i:
+                        if i['message']['chat']['id'] not in chat_list:
+                            chat_list.append(i['message']['chat']['id'])
+                    elif 'edited_message' in i:
+                        if i['edited_message']['chat']['id'] not in chat_list:
+                            chat_list.append(i['message']['chat']['id'])
                     offset = int(i['update_id']) + 1
             else:
                 break                       
