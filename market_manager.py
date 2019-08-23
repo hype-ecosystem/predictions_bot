@@ -12,8 +12,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 class MarketManager:
 
-    def __init__(self, path, bot):
-        self._bot = bot
+    def __init__(self, path, bot_token):
+        self._bot_token = bot_token
         self._logger = logging.getLogger('MarketManagerLogger')
         self._logger.setLevel(logging.ERROR)
         handler = logging.handlers.SysLogHandler(address='/dev/log')
@@ -29,42 +29,51 @@ class MarketManager:
 
     def process_market_message(self):
         try:
+            db = DatabaseManager()
+            bot = Bot(self._bot_token)
             message = self._message_queue.get()
-            chats = self._db.get_chat_list()
+            chats = db.get_chat_list()
             if(message["type"] == "text"):
-                self._bot.send_text_message(message["data"], chats)
+                bot.send_text_message(message["data"], chats)
             elif(message["type"] == "image"):
-                self._bot.send_image(message["data"], chats)
+                bot.send_image(message["data"], chats)
             self._message_queue.task_done()
         except Exception:
             self._logger.exception(f"Failed to process market message.")
 
-    def _predictions_job(self):        
-        markets_list = self._db.get_markets()
-        # Create thread for each market
-        for m in markets_list:
-            if(m in self._markets and self._markets[m].is_alive()):                
-                self._logger.error(f"Thread for market {m} is still alive.")
-                continue
-            else:
-                t = threading.Thread(target=market_thread_func, args=(m, self._path, self._message_queue))       
-                t.start()
-                self._markets[m] = t
+    def _predictions_job(self): 
+        try: 
+            db = DatabaseManager()    
+            markets_list = db.get_markets()
+            # Create thread for each market
+            for m in markets_list:
+                if(m in self._markets and self._markets[m].is_alive()):                
+                    self._logger.error(f"Thread for market {m} is still alive.")
+                    continue
+                else:
+                    t = threading.Thread(target=market_thread_func, args=(m, self._path, self._message_queue))       
+                    t.start()
+                    self._markets[m] = t
+        except Exception:            
+            self._logger.exception("Failed to start predictions job.")
     
     def _bot_job(self):
         try:
-            chats = self._bot.get_chat_list()
+            db = DatabaseManager()
+            bot = Bot(self._bot_token)
+            chats = bot.get_chat_list()
             for c in chats:
-                self._db.add_chat(c)
+                db.add_chat(c)
         except Exception:            
             self._logger.exception("Failed to collect bot chats.")
     
     def _dayly_market_plot_job(self):
         try:
+            db = DatabaseManager()
             pp = PlotProvider()
-            markets = self._db.get_markets()
+            markets = db.get_markets()
             for m in markets:
-                data = self._db.get_24h_plot_data(m)
+                data = db.get_24h_plot_data(m)
                 image = pp.get_market_24plot(data, m[1:])
                 self._message_queue.put({'type': 'image', 'data': image})
         except Exception:
@@ -82,9 +91,8 @@ def main(argv):
     if len(argv) != 3:
         print(usage)
         sys.exit(1)
-   
-    bot = Bot(argv[2])
-    manager = MarketManager(argv[1], bot)
+       
+    manager = MarketManager(argv[1], argv[2])
     manager.start()
     while True:
         manager.process_market_message()
