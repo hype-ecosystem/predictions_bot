@@ -28,5 +28,5 @@ Where:<br />
 <market_symbol> One of the symbols from https://api.bitfinex.com/v1/symbols, upper case with prefixed with 't', f.e. tBTCUSD<br />
 <path_to_store_data> Path to the directory for script data **same path as for setup script**
 
-Example of adding new market(make sure that you use nohup and save logs):
+Example of adding new market(make sure that you use nohup and save logs):<br />
 `nohup ./genotick_learn 2017-08-17 2019-08-17 tBTCUSD /home/bot/trading_bot > /home/bot/tBTCUSD.log 2>&1 &`
