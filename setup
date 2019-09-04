@@ -86,7 +86,7 @@ ALTER TABLE public.market_predictions
    ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 CREATE TABLE public.chats (
-    id integer NOT NULL
+    id VARCHAR NOT NULL
 );
 
 ALTER TABLE ONLY public.chats
