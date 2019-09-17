@@ -51,6 +51,9 @@ coverage.xml
 *.mo
 *.pot
 
+# PyCHarm
+.idea/
+
 # Django stuff:
 *.log
 local_settings.py

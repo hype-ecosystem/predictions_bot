@@ -41,6 +41,7 @@ class Market:
         self._data_path = fr"{self._path}/{self._symbol}/data/{self._symbol}.csv"
         self._reverse_data_path = fr"{self._path}/{self._symbol}/data/reverse_{self._symbol}.csv"
         self._gen_config_path = fr"{self._path}/{self._symbol}/config.txt"
+        self._robots_path = fr"{self._path}/robots"
 
     def genotick_predict_and_train(self):
         try:
@@ -62,7 +63,7 @@ class Market:
             self._make_reverse_data_file()
             print("Running genotick for prediction...")
             predictions = self._parse_prediction_output(self._genotick_predict())
-            if(len(predictions) == 0):
+            if len(predictions) == 0:
                 self._logger.info(f"No predictions for market {self._symbol}")
                 return
             print("Queuing predictions and plot to bot queue...")
@@ -88,7 +89,7 @@ class Market:
                    self._genotick_path,
                    f"input=file:{self._gen_config_path}"]
         cp = sp.run(command, env=self._get_custom_env(), universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        if(cp.returncode != 0):
+        if cp.returncode != 0:
             raise RuntimeError(f"Failed to run genotick in prediction mode for market {self._symbol}.", cp.stdout, cp.stderr)
         return cp.stdout
 
@@ -116,7 +117,7 @@ class Market:
     def _remove_old_reverse_data_file(self):
         command = ["rm", "-f", self._reverse_data_path]
         cp = sp.run(command, universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        if(cp.returncode != 0):
+        if cp.returncode != 0:
             raise RuntimeError(f"Failed to remove reverse data file for market {self._symbol}.", cp.stdout, cp.stderr)
 
     def _make_reverse_data_file(self):
@@ -126,7 +127,7 @@ class Market:
                    self._genotick_path,
                    f"reverse={self._data_path}"]
         cp = sp.run(command, env=self._get_custom_env(), universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        if(cp.returncode != 0):
+        if cp.returncode != 0:
             raise RuntimeError(f"Genotick failed to create reverse data file for market {self._symbol}. ", cp.stdout, cp.stderr)
 
     def _configure_genotick_prediction(self, start):
@@ -140,7 +141,7 @@ class Market:
                    r"s/^[^#]*endTimePoint/#&/",
                    self._gen_config_path]
         cp = sp.run(command, universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        if(cp.returncode != 0):
+        if cp.returncode != 0:
             raise RuntimeError(f"Failed to configure genotick for prediction for market {self._symbol}.", cp.stdout, cp.stderr)
 
     def _configure_genotick_training(self, start):
@@ -154,7 +155,7 @@ class Market:
                    r"s/^[^#]*endTimePoint/#&/",
                    self._gen_config_path]
         cp = sp.run(command, universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        if(cp.returncode != 0):
+        if cp.returncode != 0:
             raise RuntimeError(f"Failed to configure genotick for training for market {self._symbol}.", cp.stdout, cp.stderr)
 
     def _genotick_train(self):
@@ -162,9 +163,21 @@ class Market:
                    "-jar",
                    self._genotick_path,
                    f"input=file:{self._gen_config_path}"]
-        cp = sp.run(command, env=self._get_custom_env(), universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
-        if(cp.returncode != 0):
-            raise RuntimeError(f"Failed to train genotick for market {self._symbol}.", cp.stdout, cp.stderr)
+        with sp.Popen(command,  env=self._get_custom_env(), universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE) as proc:
+            pid = proc.pid
+            try:
+                outs, errs = proc.communicate(timeout=(45 * 60))
+            except TimeoutError:
+                proc.kill()
+                outs, errs = proc.communicate()
+                raise RuntimeError(f"Failed to run genotick in training mode for market {self._symbol}. Error: {outs}. {errs}")
+
+        newRobotsPath = f"savedPopulation_{pid}"
+        #print(fr"New population path for market {self._symbol} is {newRobotsPath}")
+        command = ["rm", "-f", "-r", self._robots_path, "&&", "mv", newRobotsPath, self._robots_path]
+        cp = sp.run(command, universal_newlines=True, stdout=sp.PIPE, stderr=sp.PIPE)
+        if cp.returncode != 0:
+            raise RuntimeError(f"Failed to move new robots for market {self._symbol}.", cp.stdout, cp.stderr)
 
 
 def main(argv):
