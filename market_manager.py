@@ -21,7 +21,7 @@ class MarketManager:
         self._db = DatabaseManager()
         self._path = path
         self._scheduler = BackgroundScheduler()
-        self._scheduler.add_job(self._dayly_market_plot_job, trigger='cron', hour='0')
+        self._scheduler.add_job(self._daily_market_plot_job, trigger='cron', hour='0')
         self._scheduler.add_job(self._predictions_job, trigger='cron', hour='*')
         self._scheduler.add_job(self._bot_job, trigger='cron', minute='*')
         self._markets = dict()
